@@ -9,6 +9,8 @@ import pyfiglet as pyfig
 import nmap
 import ipaddress  	# To check if it is a valid ip-address.
 import re  		# To ensure that the input is correctly formatted.
+import os
+
 
 # Regular Expression Pattern to extract the number of ports you want to scan. 
 # You have to specify <lowest_port_number>-<highest_port_number> (ex 10-100)
@@ -19,7 +21,7 @@ port_max = 65535
 # Initializing the color module class
 class bcolors:
     PURPLE = '\033[1;95m'
-    OKBLUE = '\033[94m'
+    OKBLUE = '\033[1;94m'
     GREEN = '\033[1;92m'
     ORANGE = '\033[1;93m'
     RED = '\033[1;91m'
@@ -64,7 +66,7 @@ def logo():
 									 d$$$$$$$$$F                $P"
 									 $$$$$$$$$$F
 									  *$$$$$$$$"   Created by: Syed Bukhari, Sheikh Arsalan
-									    "***""     Version-1.0.3
+									    "***""     Version-1.0.4
 
                                     				'''+bcolors.RESET+'''(A Multi-Tool Web Vulnerability Scanner)
                                  				   Catch us on Twitter: '''+bcolors.BG_LOW_TXT+'''@0xTheFalconX'''+bcolors.RESET+'''
@@ -78,18 +80,38 @@ logo()
 def nmapScan(ip_add_entered, port):
     nm = nmap.PortScanner()
 
+    result = nm.scan(ip_add_entered, str(port))
     # The result is quite interesting to look at. Inspect the dictionary it returns. 
     # It contains what was sent to the command line in addition to the port status we're after. 
-    # In nmap for port 80 and ip 10.0.0.2 you'd run: nmap -oX - -p 89 -sV 10.0.0.2
-    # print(result)
+    # In nmap for port 80 and ip 10.0.0.2 you'd run: nmap -oX - -p 80 -sV 10.0.0.2
+    #! print(result)
 
-    result = nm.scan(ip_add_entered, str(port))
     # We extract the port status from the returned object
     port_status = (result['scan'][ip_add_entered]['tcp'][port]['state'])
-    print(f"{bcolors.GREEN} [*] Port {port}/tcp : {port_status} {bcolors.RESET}")
+    service = (result['scan'][ip_add_entered]['tcp'][port]['name'])
+    service_product = (result['scan'][ip_add_entered]['tcp'][port]['product'])
+    service_version = (result['scan'][ip_add_entered]['tcp'][port]['version'])
+    service_os = (result['scan'][ip_add_entered]['tcp'][port]['extrainfo'])
 
+    print(f"{bcolors.GREEN}[*]{bcolors.RESET} Port {port}/tcp: {bcolors.GREEN}{port_status}{bcolors.RESET}" + f"\tService: {bcolors.GREEN}{service}{bcolors.RESET}" + f"\tVersion: {bcolors.GREEN}{service_product} {service_version}{bcolors.RESET}" + f"\tOS: {bcolors.GREEN}{service_os} {bcolors.RESET}")
 
+def check_internet():
+    os.system('ping -c1 github.com > rs_net 2>&1')
+    if "0% packet loss" in open('rs_net').read():
+        val = 1
+    else:
+        val = 0
+    os.system('rm rs_net > /dev/null 2>&1')
+    return val
+
+#! Main Program Starts
 try:
+    print(f"\n{bcolors.OKBLUE}Please wait.... checking for internet connectivity. {bcolors.RESET}")
+    internet_availability = check_internet()
+    if internet_availability == 0:
+        print(f"\n{bcolors.RED}There seems to be some problem connecting to the internet. Please make sure you're connected to the internet. {bcolors.RESET}")
+        raise SystemExit
+
     # Asking user to input the target they want to scan.
     while True:
 
@@ -137,6 +159,6 @@ try:
 
 
 except KeyboardInterrupt:
-    print(f"{bcolors.RED}\n[-] Shutting down...{bcolors.RESET}")
+    print(f"{bcolors.RED}\n[-] Received Ctrl+C hit, Shutting down...{bcolors.RESET}")
     raise SystemExit
 
