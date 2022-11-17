@@ -7,12 +7,14 @@
 
 import pyfiglet as pyfig 
 from datetime import datetime
+from queue import Queue
 from time import sleep
 import nmap
 import ipaddress  	# To check if it is a valid ip-address.
 import re  		    # To ensure that the input is correctly formatted.
 import os
 import threading
+import socket
 
 
 # Regular Expression Pattern to extract the number of ports you want to scan. 
@@ -20,7 +22,13 @@ import threading
 port_range_pattern = re.compile("([0-9]+)-([0-9]+)")
 port_min = 0
 port_max = 65535
-threads = []
+queue = Queue()
+# A print_lock is what is used to prevent "double" modification of shared variables.
+# This is used so while one thread is using a variable, others cannot access it.
+# Once done, the thread releases the print_lock to be used it again.
+print_lock = threading.Lock() 
+nm = nmap.PortScanner()
+
 
 # Initializing the color module class
 class bcolors:
@@ -64,7 +72,7 @@ def logo():
 									 d$$$$$$$$$F                $P"
 									 $$$$$$$$$$F
 									  *$$$$$$$$"   Created by: Syed Bukhari, Sheikh Arsalan
-									    "***""     Version-1.0.5
+									    "***""     Version-1.0.6
 
                                     				'''+bcolors.RESET+'''(A Multi-Tool Web Vulnerability Scanner)
                                  				   Catch us on Twitter: '''+bcolors.BG_LOW_TXT+'''@0xTheFalconX'''+bcolors.RESET+'''
@@ -73,37 +81,53 @@ def logo():
     print(bcolors.RESET, end='')
   
 
-def nmapScan(ip_address, port):
-    nm = nmap.PortScanner()
-    sleep(0.1)
-
-    result = nm.scan(ip_address, str(port))
+def nmapScan(port):
+    result = nm.scan(ip_add_entered, str(port))
     # The result is quite interesting to look at. Inspect the dictionary it returns. 
     # It contains what was sent to the command line in addition to the port status we're after. 
     # In nmap for port 80 and ip 10.0.0.2 you'd run: nmap -oX - -p 80 -sV 10.0.0.2
     #! print(result)
 
-    # We extract the port status & service information from the returned object
-    port_status = (result['scan'][ip_address]['tcp'][port]['state'])
-    service = (result['scan'][ip_address]['tcp'][port]['name'])
-    service_product = (result['scan'][ip_address]['tcp'][port]['product'])
-    service_version = (result['scan'][ip_address]['tcp'][port]['version'])
-    service_os = (result['scan'][ip_address]['tcp'][port]['extrainfo'])
+    # We extract the service information from the returned object
+    service = (result['scan'][ip_add_entered]['tcp'][port]['name'])
+    service_product = (result['scan'][ip_add_entered]['tcp'][port]['product'])
+    service_version = (result['scan'][ip_add_entered]['tcp'][port]['version'])
+    service_os = (result['scan'][ip_add_entered]['tcp'][port]['extrainfo'])
+    print(f"{bcolors.GREEN}[*]{bcolors.RESET} Port {port}/tcp: {bcolors.GREEN}open{bcolors.RESET}" + f"\tService: {bcolors.GREEN}{service}{bcolors.RESET}" + f"\tVersion: {bcolors.GREEN}{service_product} {service_version}{bcolors.RESET}" + f"\tOS: {bcolors.GREEN}{service_os} {bcolors.RESET}")
+    sleep(0.1)
 
-    if (port_status=='open'):
-        print(f"{bcolors.GREEN}[*]{bcolors.RESET} Port {port}/tcp: {bcolors.GREEN}{port_status}{bcolors.RESET}" + f"\tService: {bcolors.GREEN}{service}{bcolors.RESET}" + f"\tVersion: {bcolors.GREEN}{service_product} {service_version}{bcolors.RESET}" + f"\tOS: {bcolors.GREEN}{service_os} {bcolors.RESET}")
-    else:
+def portScan(port):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        connection = s.connect((ip_add_entered, port))
+        with print_lock:
+            nmapScan(port)
+        connection.close()
+    except:
         pass
 
-def perform_threading(ip_address):
-    # We're looping over all of the ports in the specified range.
-    for port in range(port_min, port_max + 1):
-        thread = threading.Thread(target=nmapScan, args=(ip_address, port))
-        threads.append(thread)
-    for i in range(len(threads)):
-        threads[i].start()
-    for i in range(len(threads)):
-        threads[i].join()
+# The threader thread pulls a worker from the queue and processes it
+def threader():
+    while True:
+        # Gets a worker from the queue
+        worker = queue.get()
+
+        # Run the example job with any available worker in queue (thread)
+        portScan(worker)
+
+        # Completed with the job
+        queue.task_done()
+
+def perform_threading():
+    # How many threads are we going to allow for
+    for threads in range(60):
+        thread = threading.Thread(target=threader)
+
+        # Classifying as a daemon, so they will die when the main dies
+        thread.daemon = True
+
+        # Begins, must come after daemon definition
+        thread.start()
 
 def check_internet():
     os.system('ping -c1 github.com > rs_net 2>&1')
@@ -133,7 +157,7 @@ try:
     # Asking user to input the target they want to scan.
     while True:
 
-        ip_add_entered = input("\nPlease enter the ip address that you want to scan: ")
+        ip_add_entered = input("\nPlease enter the domain or ip address of the target that you want to scan: ")
         try:
             ip_address_obj = ipaddress.ip_address(ip_add_entered)
             # The following line will only execute if the ip address is valid.
@@ -162,9 +186,14 @@ try:
 
     start_time = datetime.now()
     print(f"\nStarting Scan for {bcolors.ORANGE}{ip_add_entered}{bcolors.RESET} at {bcolors.ORANGE}{start_time}{bcolors.RESET}")
+    perform_threading()
 
-    perform_threading(ip_add_entered)
+    # How many jobs to assign
+    for worker in range(port_min, port_max + 1):   
+        queue.put(worker)
 
+    # wait until the thread terminates.
+    queue.join()
     end_time = datetime.now()
     print(f"Ending Scan for {bcolors.ORANGE}{ip_add_entered}{bcolors.RESET} at {bcolors.ORANGE}{end_time}{bcolors.RESET}")
     total_time = end_time - start_time
@@ -174,3 +203,4 @@ try:
 except KeyboardInterrupt:
     print(f"{bcolors.RED}\n[-] Received Ctrl+C hit, Shutting down...{bcolors.RESET}")
     raise SystemExit
+
