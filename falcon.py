@@ -10,9 +10,8 @@ from datetime import datetime
 from queue import Queue
 from time import sleep
 import nmap
-import ipaddress  	# To check if it is a valid ip-address.
 import re  		    # To ensure that the input is correctly formatted.
-import os
+import os           # To check for internet connectivity.
 import threading
 import socket
 import requests
@@ -56,26 +55,29 @@ class bcolors:
     BG_SCAN_TXT_END   = '\x1b[0m'
 
   
-
 def nmapScan(port):
-    result = nm.scan(ip_add_entered, str(port))
+    result = nm.scan(target, str(port))
     # The result is quite interesting to look at. Inspect the dictionary it returns. 
     # It contains what was sent to the command line in addition to the port status we're after. 
     # In nmap for port 80 and ip 10.0.0.2 you'd run: nmap -oX - -p 80 -sV 10.0.0.2
     #! print(result)
 
+    for host in nm.all_hosts():						# nm.all_hosts() = ['10.10.10.10']
+        for proto in nm[host].all_protocols():      # nm[host].all_protocols() = tcp
+            pass
+
     # We extract the service information from the returned object
-    service = (result['scan'][ip_add_entered]['tcp'][port]['name'])
-    service_product = (result['scan'][ip_add_entered]['tcp'][port]['product'])
-    service_version = (result['scan'][ip_add_entered]['tcp'][port]['version'])
-    service_os = (result['scan'][ip_add_entered]['tcp'][port]['extrainfo'])
-    print(f"{bcolors.GREEN}[*]{bcolors.RESET} Port {port}/tcp: {bcolors.GREEN}open{bcolors.RESET}" + f"\tService: {bcolors.GREEN}{service}{bcolors.RESET}" + f"\tVersion: {bcolors.GREEN}{service_product} {service_version}{bcolors.RESET}" + f"\tOS: {bcolors.GREEN}{service_os} {bcolors.RESET}")
+    service = (result['scan'][host][proto][port]['name'])
+    service_product = (result['scan'][host][proto][port]['product'])
+    service_version = (result['scan'][host][proto][port]['version'])
+    service_os = (result['scan'][host][proto][port]['extrainfo'])
+    print(f"{bcolors.GREEN}[*]{bcolors.RESET} Port {port}/{proto}: {bcolors.GREEN}open{bcolors.RESET}" + f"\tService: {bcolors.GREEN}{service}{bcolors.RESET}" + f"\tVersion: {bcolors.GREEN}{service_product} {service_version}{bcolors.RESET}" + f"\tOS: {bcolors.GREEN}{service_os} {bcolors.RESET}")
     sleep(0.1)
 
 def portScan(port):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        connection = s.connect((ip_add_entered, port))
+        connection = s.connect((target, port))
         with print_lock:
             nmapScan(port)
         connection.close()
@@ -147,6 +149,7 @@ if __name__ == '__main__':     #? To ensure that the program only runs when it's
 
     from utilities.logo import logo
     from utilities.subdomain import scan
+    from utilities.target_validation import validate_input
 
     # Printing Title & LoGo
     print(bcolors.CYAN, end='')
@@ -165,19 +168,22 @@ if __name__ == '__main__':     #? To ensure that the program only runs when it's
         # Asking user to input the target they want to scan.
         while True:
 
-            ip_add_entered = input("\nPlease enter the domain or ip address of the target that you want to scan: ")
+            target = input("\nPlease enter the domain or ip address of the target that you want to scan: ")
 
-            BASE_URL = f"http://{ip_add_entered}"
-            # This is the list of common directories and files that we want to try
-            DIRECTORIES_AND_FILES = ["/admin", "/login", "/index.html", "/about.html", "/contact.html", "/logout", "/.htpasswd", "/assets"]
+            validate_input(target)
+            input_type = validate_input(target)
 
-            try:
-                ip_address_obj = ipaddress.ip_address(ip_add_entered)
-                # The following line will only execute if the ip address is valid.
+            if input_type == "IP":
                 break
+            elif input_type == "DOMAIN":
+                break
+            else:
+                print(f"{bcolors.RED}You entered an invalid ip address/domain. {bcolors.RESET}")
+              
 
-            except:
-                print(f"{bcolors.RED}You entered an invalid ip address. {bcolors.RESET}")
+        BASE_URL = f"http://{target}"
+        # This is the list of common directories and files that we want to try
+        DIRECTORIES_AND_FILES = ["/admin", "/login", "/index.html", "/about.html", "/contact.html", "/logout", "/.htpasswd", "/assets", "/news", "/downloads", "/robots.txt"]
 
         # Asking user to input port range they want to scan (0-65535).
         while True:
@@ -202,7 +208,7 @@ if __name__ == '__main__':     #? To ensure that the program only runs when it's
 
 
         start_time = datetime.now()
-        print(f"\nStarting Scan for {bcolors.ORANGE}{ip_add_entered}{bcolors.RESET} at {bcolors.ORANGE}{start_time}{bcolors.RESET}")
+        print(f"\nStarting {bcolors.CYAN}Full Scan{bcolors.RESET} for {bcolors.ORANGE}{target}{bcolors.RESET} at {bcolors.ORANGE}{start_time}{bcolors.RESET}")
         perform_threading()
 
         # How many jobs to assign
@@ -212,21 +218,21 @@ if __name__ == '__main__':     #? To ensure that the program only runs when it's
         # wait until the thread terminates.
         queue.join()
         end_time = datetime.now()
-        print(f"Ending Scan for {bcolors.ORANGE}{ip_add_entered}{bcolors.RESET} at {bcolors.ORANGE}{end_time}{bcolors.RESET}")
+        print(f"Ending {bcolors.CYAN}Full Scan{bcolors.RESET} for {bcolors.ORANGE}{target}{bcolors.RESET} at {bcolors.ORANGE}{end_time}{bcolors.RESET}")
         total_time = end_time - start_time
         print(f"\nTotal Time Elasped: {bcolors.CYAN}{total_time}{bcolors.RESET}")
 
+        print(f"\nStarting {bcolors.CYAN}Directory/File bruteforcing{bcolors.RESET} on {bcolors.ORANGE}{target}{bcolors.RESET}")
         discover()
 
-        domain = input("Enter the domain name: ")
+        print(f"\nStarting {bcolors.CYAN}Subdomain enumeration{bcolors.RESET} on {bcolors.ORANGE}{target}{bcolors.RESET}")
         with open("./wordlists/subdomains.lst", "r") as wordlist_file: 
             for line in wordlist_file: 
                 word = line.strip()
-                subdomain = word + "." + domain
+                subdomain = word + "." + target
                 t = threading.Thread(target=scan, args=(subdomain,))
                 t.start()
                 thread_list.append(t)
-
         for thread in thread_list:
             thread.join()
 
