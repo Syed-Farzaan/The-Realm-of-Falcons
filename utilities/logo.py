@@ -17,7 +17,7 @@ def logo():
 									 d$$$$$$$$$F                $P"
 									 $$$$$$$$$$F
 									  *$$$$$$$$"   Created by: Syed Bukhari, Sheikh Arsalan
-									    "***""     Version-1.0.8
+									    "***""     Version-1.0.9
 
                                     				'''+bcolors.RESET+'''(A Multi-Tool Web Vulnerability Scanner)
                                  				   Catch us on Twitter: '''+bcolors.BG_LOW_TXT+'''@0xTheFalconX'''+bcolors.RESET+'''

@@ -121,7 +121,7 @@ def discover():
   threads = []
   for directory_or_file in DIRECTORIES_AND_FILES:
     # Create the full URL by combining the base URL and the directory or file
-    url = BASE_URL + directory_or_file
+    url = BASE_TARGET + directory_or_file
 
     # Create a new thread for the URL and add it to the list of threads
     thread = threading.Thread(target=get_request, args=(url,))
@@ -150,6 +150,7 @@ if __name__ == '__main__':     #? To ensure that the program only runs when it's
     from utilities.logo import logo
     from utilities.subdomain import scan
     from utilities.target_validation import validate_input
+    from vulnerability_check.xss_check import scan_xss
 
     # Printing Title & LoGo
     print(bcolors.CYAN, end='')
@@ -181,9 +182,9 @@ if __name__ == '__main__':     #? To ensure that the program only runs when it's
                 print(f"{bcolors.RED}You entered an invalid ip address/domain. {bcolors.RESET}")
               
 
-        BASE_URL = f"http://{target}"
+        BASE_TARGET = f"http://{target}"
         # This is the list of common directories and files that we want to try
-        DIRECTORIES_AND_FILES = ["/admin", "/login", "/index.html", "/about.html", "/contact.html", "/logout", "/.htpasswd", "/assets", "/news", "/downloads", "/robots.txt"]
+        DIRECTORIES_AND_FILES = ["/admin", "/login", "/index.html", "/about.html", "/contact.html", "/logout", "/.htpasswd", "/assets", "/news", "/downloads", "/robots.txt", "/search"]
 
         # Asking user to input port range they want to scan (0-65535).
         while True:
@@ -235,6 +236,9 @@ if __name__ == '__main__':     #? To ensure that the program only runs when it's
                 thread_list.append(t)
         for thread in thread_list:
             thread.join()
+
+        print(f"\nInitiating {bcolors.CYAN}Cross-Site Scripting Attacks/Vulnerabilty Check{bcolors.RESET} on {bcolors.ORANGE}{target}{bcolors.RESET}")
+        print(scan_xss(BASE_TARGET))
 
     except KeyboardInterrupt:
         print(f"{bcolors.RED}\n[-] Received Ctrl+C hit, Shutting down...{bcolors.RESET}")
